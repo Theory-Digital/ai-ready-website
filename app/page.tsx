@@ -1,15 +1,12 @@
 "use client";
 
-import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Import shared components
-import Button from "@/components/shared/button/Button";
 import { Connector } from "@/components/shared/layout/curvy-rect";
 import HeroFlame from "@/components/shared/effects/flame/hero-flame";
 import AsciiExplosion from "@/components/shared/effects/flame/ascii-explosion";
-import { HeaderProvider } from "@/components/shared/header/HeaderContext";
 
 // Import hero section components
 import HomeHeroBackground from "@/components/app/(home)/sections/hero/Background/Background";
@@ -21,51 +18,66 @@ import HeroInputSubmitButton from "@/components/app/(home)/sections/hero-input/B
 import Globe from "@/components/app/(home)/sections/hero-input/_svg/Globe";
 import HeroScraping from "@/components/app/(home)/sections/hero-scraping/HeroScraping";
 import { Endpoint } from "@/components/shared/Playground/Context/types";
-import InlineResults from "@/components/app/(home)/sections/ai-readiness/InlineResults";
 import ControlPanel from "@/components/app/(home)/sections/ai-readiness/ControlPanel";
 
 // Import header components
-import HeaderBrandKit from "@/components/shared/header/BrandKit/BrandKit";
+import { HeaderProvider } from "@/components/shared/header/HeaderContext";
 import HeaderWrapper from "@/components/shared/header/Wrapper/Wrapper";
-import HeaderDropdownWrapper from "@/components/shared/header/Dropdown/Wrapper/Wrapper";
-import GithubIcon from "@/components/shared/header/Github/_svg/GithubIcon";
-import ButtonUI from "@/components/ui/shadcn/button";
+
+function NinetyLogo() {
+  return (
+    <div className="inline-flex items-stretch border-2 border-[#0A0A0A] text-[#0A0A0A]">
+      <div className="ninety-display flex items-center bg-[#F4EFE4] px-10 py-7 text-[18px] leading-none">
+        THE
+      </div>
+      <div className="ninety-display flex items-center border-l-2 border-[#0A0A0A] bg-[#FFD100] px-12 py-7 text-[34px] leading-none">
+        90
+      </div>
+    </div>
+  );
+}
 
 export default function StyleGuidePage() {
-  const [tab, setTab] = useState<Endpoint>(Endpoint.Scrape);
+  const [tab] = useState<Endpoint>(Endpoint.Scrape);
   const [url, setUrl] = useState<string>("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [analysisStep, setAnalysisStep] = useState(0);
   const [analysisData, setAnalysisData] = useState<any>(null);
-  const [hasOpenAIKey, setHasOpenAIKey] = useState(false);
   const [urlError, setUrlError] = useState<string>("");
-  
-  // Check for API keys on mount
-  useEffect(() => {
-    fetch('/api/check-config')
-      .then(res => res.json())
-      .then(data => {
-        setHasOpenAIKey(data.hasOpenAIKey || false);
-      })
-      .catch(() => setHasOpenAIKey(false));
-  }, []);
-  
-  const handleAnalysis = async () => {
-    if (!url) return;
-    
+  const [signedParams, setSignedParams] = useState<{
+    url: string;
+    expires: string;
+    signature: string;
+  } | null>(null);
+  const [checkedSignedParams, setCheckedSignedParams] = useState(false);
+  const autoStartedRef = useRef(false);
+  const contactEmail = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "megan@theorydigital.ca";
+  const contactHref = `mailto:${contactEmail.replace(/^mailto:/i, "")}`;
+
+  const handleAnalysis = async (
+    targetUrl = url,
+    signatureParams = signedParams
+  ) => {
+    if (!targetUrl) return;
+
+    if (!signatureParams) {
+      setUrlError('This report requires a private signed link.');
+      return;
+    }
+
     // Auto-prepend https:// if no protocol is provided
-    let processedUrl = url.trim();
+    let processedUrl = targetUrl.trim();
     if (!processedUrl.match(/^https?:\/\//i)) {
       processedUrl = 'https://' + processedUrl;
     }
-    
+
     // Validate URL format
     try {
       const urlObj = new URL(processedUrl);
       // Check if it's http or https
-      if (!['http:', 'https:'].includes(urlObj.protocol)) {
-        setUrlError('Please enter a valid URL (e.g., example.com)');
+      if (urlObj.protocol !== 'https:') {
+        setUrlError('Signed reports require an HTTPS website URL.');
         return;
       }
     } catch (error) {
@@ -73,11 +85,11 @@ export default function StyleGuidePage() {
       setUrlError('Please enter a valid URL (e.g., example.com)');
       return;
     }
-    
+
     setIsAnalyzing(true);
     setShowResults(false);
     setAnalysisData(null);
-    
+
     try {
       // Start basic analysis
       const basicAnalysisPromise = fetch('/api/ai-readiness', {
@@ -85,19 +97,25 @@ export default function StyleGuidePage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url: processedUrl }),
+        body: JSON.stringify({
+          url: processedUrl,
+          expires: signatureParams.expires,
+          signature: signatureParams.signature,
+        }),
       });
-      
-      // Disable automatic AI analysis for now - user will click button
-      let aiAnalysisPromise = null;
-      
+
       // Wait for basic analysis
       const response = await basicAnalysisPromise;
       const data = await response.json();
-      
+
       if (data.success) {
         setAnalysisData({
           ...data,
+          signedParams: {
+            url: processedUrl,
+            expires: signatureParams.expires,
+            signature: signatureParams.signature,
+          },
           aiAnalysisPromise: null, // No auto AI analysis
           hasOpenAIKey: false, // Disable auto AI
           autoStartAI: false // Don't auto-start
@@ -107,7 +125,7 @@ export default function StyleGuidePage() {
       } else {
         console.error('Analysis failed:', data.error);
         setIsAnalyzing(false);
-        alert('Failed to analyze website. Please check the URL and try again.');
+        setUrlError(data.error || 'This report link is invalid or expired.');
       }
     } catch (error) {
       console.error('Analysis error:', error);
@@ -116,39 +134,52 @@ export default function StyleGuidePage() {
     }
   };
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const signedUrl = params.get('url');
+    const expires = params.get('expires');
+    const signature = params.get('signature') || params.get('sig');
+
+    if (signedUrl && expires && signature) {
+      const nextSignedParams = { url: signedUrl, expires, signature };
+      setSignedParams(nextSignedParams);
+      setUrl(signedUrl);
+
+      if (!autoStartedRef.current) {
+        autoStartedRef.current = true;
+        handleAnalysis(signedUrl, nextSignedParams);
+      }
+    }
+
+    setCheckedSignedParams(true);
+  }, []);
+
+  const hasSignedAccess = !!signedParams;
+
   return (
     <HeaderProvider>
-      <div className="min-h-screen bg-background-base">
+      <div className="ninety-brand min-h-screen bg-background-base">
         {/* Header/Navigation Section */}
-        <HeaderDropdownWrapper />
-        
-        <div className="sticky top-0 left-0 w-full z-[101] bg-background-base header">
-          <div className="absolute top-0 cmw-container border-x border-border-faint h-full pointer-events-none" />
-          
-          <div className="h-1 bg-border-faint w-full left-0 -bottom-1 absolute" />
-          
-          <div className="cmw-container absolute h-full pointer-events-none top-0">
+        <div className="sticky top-0 left-0 w-full z-[101] bg-background-base header border-b-2 border-[#0A0A0A]">
+          <div className="absolute top-0 cmw-container h-full border-x-2 border-[#0A0A0A] pointer-events-none" />
+
+          <div className="cmw-container absolute top-0 h-full pointer-events-none">
             <Connector className="absolute -left-[10.5px] -bottom-11" />
             <Connector className="absolute -right-[10.5px] -bottom-11" />
           </div>
-          
+
           <HeaderWrapper>
             <div className="max-w-[900px] mx-auto w-full flex justify-between items-center">
               <div className="flex gap-24 items-center">
-                <HeaderBrandKit />
+                <NinetyLogo />
               </div>
-              
+
               <div className="flex gap-8">
-                {/* GitHub Template Button */}
                 <a
-                  className="contents"
-                  href="https://github.com/firecrawl/ai-ready-website"
-                  target="_blank"
+                  className="ninety-mono ninety-lift border-2 border-[#0A0A0A] bg-[#FFD100] px-16 py-10 text-[11px] text-[#0A0A0A]"
+                  href={contactHref}
                 >
-                  <ButtonUI variant="tertiary">
-                    <GithubIcon />
-                    Use this Template
-                  </ButtonUI>
+                  Contact Us
                 </a>
               </div>
             </div>
@@ -157,12 +188,12 @@ export default function StyleGuidePage() {
 
         {/* Hero Section */}
         <section className="overflow-x-clip" id="home-hero">
-          <div className={`pt-28 lg:pt-254 lg:-mt-100 pb-115 relative ${isAnalyzing || showResults ? '' : ''}`} id="hero-content">
+          <div className="relative pt-28 pb-115 lg:-mt-100 lg:pt-254" id="hero-content">
             <HomeHeroPixi />
             <HeroFlame />
             <BackgroundOuterPiece />
             <HomeHeroBackground />
-            
+
             <AnimatePresence mode="wait">
               {!isAnalyzing && !showResults ? (
                 <motion.div
@@ -174,19 +205,26 @@ export default function StyleGuidePage() {
                 >
                   <HomeHeroBadge />
                   <HomeHeroTitle />
-                  
+
                   <p className="text-center text-body-large">
-                    Analyze how AI-ready your webpage is from a single
+                    {hasSignedAccess
+                      ? 'Your private AI readiness report is being prepared from a single'
+                      : 'Private AI readiness reports for industrial companies that need to be found by'}
                     <br className="lg-max:hidden" />
-                    page snapshot. High-signal metrics for LLM compatibility.
+                    {hasSignedAccess ? ' page snapshot.' : ' buyers, search engines, and AI assistants.'}
                   </p>
-                  <Link
-                    className="bg-black-alpha-4 hover:bg-black-alpha-6 rounded-6 px-8 lg:px-6 text-label-large h-30 lg:h-24 block mt-8 mx-auto w-max gap-4 transition-all"
-                    href="#"
-                    onClick={(e) => e.preventDefault()}
-                  >
-                    Powered by Firecrawl.
-                  </Link>
+                  {!checkedSignedParams ? null : !hasSignedAccess ? (
+                    <a
+                      className="ninety-mono ninety-lift block mx-auto mt-18 w-max border-2 border-[#0A0A0A] bg-[#FFD100] px-18 py-12 text-[12px] text-[#0A0A0A]"
+                      href={contactHref}
+                    >
+                      Contact us for a report
+                    </a>
+                  ) : (
+                    <div className="ninety-mono block mx-auto mt-12 w-max border border-[#0A0A0A] bg-[#F4EFE4] px-10 py-6 text-[10px]">
+                      Private report link
+                    </div>
+                  )}
                 </motion.div>
               ) : (
                 <motion.div
@@ -207,54 +245,41 @@ export default function StyleGuidePage() {
                       setShowResults(false);
                       setAnalysisStep(0);
                       setAnalysisData(null);
-                      setUrl("");
+                      setUrl(signedParams?.url || "");
                     }}
                   />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-          
-          {/* Mini Playground Input - Only show when not analyzing */}
-          {!isAnalyzing && !showResults && (
-            <motion.div 
+
+          {/* Signed report input - only show when not analyzing */}
+          {!isAnalyzing && !showResults && hasSignedAccess && (
+            <motion.div
               className="container lg:contents !p-16 relative -mt-90"
               initial={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <div className="absolute top-0 left-[calc(50%-50vw)] w-screen h-1 bg-border-faint lg:hidden" />
-              <div className="absolute bottom-0 left-[calc(50%-50vw)] w-screen h-1 bg-border-faint lg:hidden" />
-              
+              <div className="absolute top-0 left-[calc(50%-50vw)] h-1 w-screen bg-border-faint lg:hidden" />
+              <div className="absolute bottom-0 left-[calc(50%-50vw)] h-1 w-screen bg-border-faint lg:hidden" />
+
               <Connector className="-top-10 -left-[10.5px] lg:hidden" />
               <Connector className="-top-10 -right-[10.5px] lg:hidden" />
               <Connector className="-bottom-10 -left-[10.5px] lg:hidden" />
               <Connector className="-bottom-10 -right-[10.5px] lg:hidden" />
-              
+
               {/* Hero Input Component */}
-              <div className="max-w-552 mx-auto w-full relative z-[11] lg:z-[2] rounded-20 -mt-30 lg:-mt-30">
-                <div
-                  className="overlay bg-accent-white"
-                  style={{
-                    boxShadow:
-                      "0px 0px 44px 0px rgba(0, 0, 0, 0.02), 0px 88px 56px -20px rgba(0, 0, 0, 0.03), 0px 56px 56px -20px rgba(0, 0, 0, 0.02), 0px 32px 32px -20px rgba(0, 0, 0, 0.03), 0px 16px 24px -12px rgba(0, 0, 0, 0.03), 0px 0px 0px 1px rgba(0, 0, 0, 0.05), 0px 0px 0px 10px #F9F9F9",
-                  }}
-                />
-                
+              <div className="relative z-[11] mx-auto -mt-30 w-full max-w-552 rounded-8 border-2 border-[#0A0A0A] bg-[#F4EFE4] shadow-[8px_8px_0_#0A0A0A] lg:z-[2] lg:-mt-30">
                 <div className="p-16 flex gap-12 items-center w-full relative">
                   <Globe />
-                  
+
                   <input
                     className={`flex-1 bg-transparent text-body-input text-accent-black placeholder:text-black-alpha-48 focus:outline-none focus:ring-0 focus:border-transparent ${urlError ? 'text-heat-200' : ''}`}
                     placeholder="example.com"
                     type="text"
                     value={url}
-                    onChange={(e) => {
-                      const newUrl = e.target.value;
-                      setUrl(newUrl);
-                      // Clear error when user starts typing
-                      if (urlError) setUrlError("");
-                    }}
+                    readOnly
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && url.length > 0) {
                         e.preventDefault();
@@ -262,19 +287,19 @@ export default function StyleGuidePage() {
                       }
                     }}
                   />
-                  
+
                   <div
                     onClick={(e) => {
                       e.preventDefault();
                       if (url.length > 0) {
-                        handleAnalysis();
+                        handleAnalysis(url, signedParams);
                       }
                     }}
                   >
                     <HeroInputSubmitButton dirty={url.length > 0} tab={tab} />
                   </div>
                 </div>
-                
+
                 {/* Error message */}
                 {urlError && (
                   <motion.div
@@ -285,13 +310,13 @@ export default function StyleGuidePage() {
                     {urlError}
                   </motion.div>
                 )}
-                
+
                 <div className="h-248 top-84 cw-768 pointer-events-none absolute overflow-clip -z-10">
                   <AsciiExplosion className="-top-200" />
                 </div>
               </div>
-              
-              {/* Hero Scraping Animation */}
+
+              {/* Hero report animation */}
               <HeroScraping />
             </motion.div>
           )}

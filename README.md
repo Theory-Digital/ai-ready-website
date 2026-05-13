@@ -1,8 +1,6 @@
-# AI Ready Website
+# The Ninety AI Readiness Report
 
-<img src="https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExbzZyaXVlOXoyaGJmMGV5YzBlbXNod2U5emRrZ2lqZTM1eGI1aHlzZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/irNt0XtSKmenMRqMre/giphy.gif" width="100%" alt="AI Ready Website">
-
-A web application to analyze websites for AI readiness and optimization.
+A signed-link website report for industrial companies that need to be found by buyers, search engines, and AI assistants.
 
 ## Setup
 
@@ -15,7 +13,9 @@ npm install
 ```bash
 # Copy from .env.local.example or add your API keys
 OPENAI_API_KEY=your_openai_api_key
-FIRECRAWL_API_KEY=your_firecrawl_api_key
+SCRAPE_PROVIDER_API_KEY=your_scraping_provider_api_key
+SIGNED_ANALYSIS_SECRET=use_a_long_random_secret
+NEXT_PUBLIC_CONTACT_EMAIL=megan@theorydigital.ca
 ```
 
 3. Run the development server:
@@ -25,9 +25,31 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to view the application.
 
+## Signed Report Links
+
+Public visitors see a contact button. Analysis only runs from signed URLs.
+
+Generate a report link:
+
+Generate a secret:
+
+```bash
+openssl rand -base64 32
+```
+
+Put that value in `.env.local` as `SIGNED_ANALYSIS_SECRET`.
+
+Generate a signed report link:
+
+```bash
+SIGNED_ANALYSIS_SECRET=your_secret npm run sign-url -- https://example.com https://reports.yoursite.com 14
+```
+
+The generated URL includes `url`, `expires`, and `signature` query params. API routes reject requests without a valid signature. Links can be valid for up to 45 days.
+
 ## Features
 
-- AI Readiness Analysis for websites
-- Real-time scoring and recommendations
-- Visual charts and metrics
-- SEO and accessibility checks
+- Signed report links for controlled access
+- Industrial buyer-readiness scoring
+- Plain-English practical impact summary
+- Technical details for SEO, accessibility, schema, and crawler checks

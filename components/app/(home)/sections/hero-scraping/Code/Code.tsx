@@ -7,19 +7,19 @@ import HeroScrapingCodeLoading from "./Loading/Loading";
 import Code from "@/components/ui/code";
 
 const URL = {
-  value: "https://example.com",
+  value: "https://industrialco.ca",
   encrypted: "h=t*A:!/z!aap?A-cZz",
 };
 const MARKDOWN = {
-  value: "# Getting Started...",
+  value: "# Capabilities...",
   encrypted: "# ?0z-ang S*a-Z-a0*9",
 };
 const TITLE = {
-  value: "Guide",
+  value: "Services",
   encrypted: "G!=*?",
 };
 const SCREENSHOT = {
-  value: "https://example.com/hero",
+  value: "https://industrialco.ca/shop",
   encrypted: "ht-=*:/?*Za!zl=-?a9?h0-!",
 };
 
@@ -133,9 +133,9 @@ export default function HeroScrapingCode({ step }: { step: number }) {
             code={`[
   {
     "url": "${url}",
-    "markdown": "${markdown}",
-    "json": { "title": "${title}", "docs": "..." },
-    "screenshot": "${screenshot}.png"
+    "summary": "${markdown}",
+    "buyerSignals": { "title": "${title}", "rfq": "..." },
+    "snapshot": "${screenshot}.png"
   }
 ]`}
             language="json"

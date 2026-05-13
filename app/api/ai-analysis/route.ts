@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { verifySignedAnalysisParams } from '../../../utils/signed-analysis';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
+
+export const runtime = 'nodejs';
+
+const AI_ANALYSIS_MODEL = 'gpt-5.5';
 
 interface AIAnalysisRequest {
   url: string;
@@ -12,28 +17,15 @@ interface AIAnalysisRequest {
 }
 
 async function generateAIInsights(url: string, htmlContent: string, currentChecks: any[]) {
-  // Try Groq first since OpenAI has quota issues
-  return generateGroqInsights(url, htmlContent, currentChecks);
+  return generateOpenAIInsights(url, htmlContent, currentChecks);
 }
 
-async function generateGroqInsights(url: string, htmlContent: string, currentChecks: any[]) {
+async function generateOpenAIInsights(url: string, htmlContent: string, currentChecks: any[]) {
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'moonshotai/kimi-k2-instruct',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an AI readiness expert analyzing websites for ANY industry (e-commerce, news, education, healthcare, business, etc). Provide industry-appropriate recommendations. Be specific with examples relevant to the site type.'
-          },
-          {
-            role: 'user',
-            content: `Analyze this webpage for AI readiness. This could be ANY type of site - adapt your analysis accordingly.
+    const response = await openai.responses.create({
+      model: AI_ANALYSIS_MODEL,
+      instructions: 'You are an AI readiness expert analyzing industrial and B2B local service websites, especially companies serving Nisku, Leduc County, Edmonton, Alberta, and Western Canada. Provide practical recommendations for procurement, local discovery, and AI extraction. Return only valid JSON.',
+      input: `Analyze this webpage for AI readiness for an industrial company serving the Nisku / Edmonton region. Adapt recommendations to B2B buyers, procurement teams, and AI systems trying to identify capabilities, service area, trust signals, and RFQ paths.
 
 URL: ${url}
 Page-Level Scores: ${JSON.stringify(currentChecks.filter(c => ['readability', 'heading-structure', 'meta-tags'].includes(c.id)).map(c => c.label + ': ' + c.score))}
@@ -48,34 +40,32 @@ Analyze these universal AI readiness factors:
 7. Content Uniqueness (content-uniqueness) - Is this original content vs duplicated/thin content?
 8. Machine Interpretability (machine-interpretability) - How easily can AI parse and understand this?
 
-Adapt your analysis to the site type (e-commerce should focus on product data, news on article structure, etc).
-Return JSON with insights array containing {id, label, score(0-100), status(pass/warning/fail), details, recommendation, actionItems(array of 5 specific actions)} for each area.`
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000
-      })
+Also evaluate industrial buyer signals: LocalBusiness/Organization schema, Service/Product schema, service area, equipment/spec data, safety certifications, procurement/RFQ path, emergency service availability, industries served, and project evidence.
+Return JSON with insights array containing {id, label, score(0-100), status(pass/warning/fail), details, recommendation, actionItems(array of 5 specific actions)} for each area.`,
+      max_output_tokens: 6000,
+      text: {
+        format: { type: 'json_object' },
+      },
     });
 
-    const data = await response.json();
-    if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
-      let content = data.choices[0].message.content;
+    if (response.output_text) {
+      let content = response.output_text;
       // Remove markdown code blocks if present
       content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       try {
         return JSON.parse(content);
       } catch (parseError) {
-        console.error('Failed to parse Groq response:', parseError);
+        console.error('Failed to parse OpenAI response:', parseError);
         console.log('Raw content:', content.substring(0, 200));
         return generateMockInsights(url);
       }
     } else {
-      console.error('Invalid Groq response format:', data);
+      console.error('Invalid OpenAI response format:', response);
       return generateMockInsights(url);
     }
   } catch (error) {
-    console.error('Groq API error:', error);
-    // Return mock data if both APIs fail
+    console.error('OpenAI API error:', error);
+    // Return mock data if the API call fails
     return generateMockInsights(url);
   }
 }
@@ -213,12 +203,31 @@ function generateMockInsights(url: string = 'https://example.com') {
 
 export async function POST(request: NextRequest) {
   try {
-    const { url, htmlContent, currentChecks } = await request.json();
-    
+    const body = await request.json();
+    const signedAnalysis = await verifySignedAnalysisParams({
+      url: body.url,
+      expires: body.expires,
+      signature: body.signature,
+    });
+
+    if (!signedAnalysis.ok || !signedAnalysis.url) {
+      return NextResponse.json(
+        { error: signedAnalysis.error || 'A valid signed analysis link is required' },
+        { status: signedAnalysis.status || 401 }
+      );
+    }
+
+    const { htmlContent, currentChecks } = body;
+    const url = signedAnalysis.url;
+
     if (!url || !htmlContent) {
       return NextResponse.json({ error: 'URL and HTML content are required' }, { status: 400 });
     }
-    
+
+    if (typeof htmlContent !== 'string' || htmlContent.length > 12000) {
+      return NextResponse.json({ error: 'HTML content is too large' }, { status: 413 });
+    }
+
     const insights = await generateAIInsights(url, htmlContent, currentChecks || []);
     
     return NextResponse.json({

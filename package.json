@@ -1,11 +1,12 @@
 {
-  "name": "firecrawl-style-guide",
+  "name": "ninety-ai-readiness-report",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "sign-url": "node scripts/sign-analysis-url.mjs",
     "lint": "next lint"
   },
   "dependencies": {

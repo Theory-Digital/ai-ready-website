@@ -48,8 +48,9 @@ export default function RadarChart({ data, size = 300 }: RadarChartProps) {
       <svg width={size} height={size} className="overflow-visible">
         <defs>
           <linearGradient id="radar-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#FF4A00" stopOpacity="0.8" />
-            <stop offset="100%" stopColor="#FF8533" stopOpacity="0.3" />
+            <stop offset="0%" stopColor="#10b981" stopOpacity="0.55" />
+            <stop offset="50%" stopColor="#f59e0b" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#ef4444" stopOpacity="0.25" />
           </linearGradient>
           <filter id="radar-glow">
             <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
@@ -95,7 +96,7 @@ export default function RadarChart({ data, size = 300 }: RadarChartProps) {
         <motion.polygon
           points={polygonPoints}
           fill="url(#radar-gradient)"
-          stroke="#FF4A00"
+          stroke="#10b981"
           strokeWidth="2"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -112,7 +113,7 @@ export default function RadarChart({ data, size = 300 }: RadarChartProps) {
               cx={point.x}
               cy={point.y}
               r="4"
-              fill="#FF4A00"
+              fill={item.score >= 80 ? "#10b981" : item.score >= 50 ? "#f59e0b" : "#ef4444"}
               stroke="white"
               strokeWidth="2"
               initial={{ scale: 0 }}
@@ -185,7 +186,8 @@ export default function RadarChart({ data, size = 300 }: RadarChartProps) {
                 y={y + dy + 12}
                 textAnchor={textAnchor as any}
                 dominantBaseline="middle"
-                className="text-[10px] fill-heat-100 font-bold"
+                className="text-[10px] font-bold"
+                fill={item.score >= 80 ? "#047857" : item.score >= 50 ? "#b45309" : "#b91c1c"}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.1 + i * 0.05 }}
@@ -202,16 +204,16 @@ export default function RadarChart({ data, size = 300 }: RadarChartProps) {
       <div className="mt-16 flex justify-center">
         <div className="inline-flex flex-row gap-16 text-xs text-black-alpha-48 bg-white px-16 py-8 rounded-6 shadow-sm">
           <div className="flex items-center gap-8">
-            <div className="w-12 h-12 rounded-full bg-heat-200" />
+            <div className="w-12 h-12 rounded-full bg-emerald-500" />
             <span className="whitespace-nowrap">80-100%</span>
           </div>
           <div className="flex items-center gap-8">
-            <div className="w-12 h-12 rounded-full bg-heat-100" />
-            <span className="whitespace-nowrap">60-79%</span>
+            <div className="w-12 h-12 rounded-full bg-amber-500" />
+            <span className="whitespace-nowrap">50-79%</span>
           </div>
           <div className="flex items-center gap-8">
-            <div className="w-12 h-12 rounded-full bg-heat-50" />
-            <span className="whitespace-nowrap">&lt;60%</span>
+            <div className="w-12 h-12 rounded-full bg-red-500" />
+            <span className="whitespace-nowrap">&lt;50%</span>
           </div>
         </div>
       </div>

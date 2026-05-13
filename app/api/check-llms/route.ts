@@ -1,23 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import FirecrawlApp from '@mendable/firecrawl-js';
+import ScrapeProvider from '@mendable/firecrawl-js';
+import { verifySignedAnalysisParams } from '../../../utils/signed-analysis';
 
-const firecrawl = new FirecrawlApp({
-  apiKey: process.env.FIRECRAWL_API_KEY!
+const scrapeProvider = new ScrapeProvider({
+  apiKey: process.env.SCRAPE_PROVIDER_API_KEY || process.env.FIRECRAWL_API_KEY!
 });
+
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
-    let { url } = await request.json();
-    
-    if (!url) {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+    const body = await request.json();
+    const signedAnalysis = await verifySignedAnalysisParams({
+      url: body.url,
+      expires: body.expires,
+      signature: body.signature,
+    });
+
+    if (!signedAnalysis.ok || !signedAnalysis.url) {
+      return NextResponse.json(
+        { error: signedAnalysis.error || 'A valid signed analysis link is required' },
+        { status: signedAnalysis.status || 401 }
+      );
     }
-    
-    // Ensure URL has protocol
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://' + url;
-    }
-    
+
+    const url = signedAnalysis.url;
     const baseUrl = new URL(url).origin;
     
     // Check for llms.txt variations directly
@@ -60,20 +67,20 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Also try with Firecrawl to see what it finds
+    // Also try through the configured scraping provider to see what it finds.
     try {
-      const scrapeResult = await firecrawl.scrape(`${baseUrl}/llms.txt`, {
+      const scrapeResult = await scrapeProvider.scrape(`${baseUrl}/llms.txt`, {
         formats: ['markdown'],
       });
-      
-      results.firecrawlResult = {
+
+      results.providerResult = {
         success: true,
         hasContent: !!scrapeResult?.markdown,
         contentLength: scrapeResult?.markdown?.length || 0,
         first100Chars: scrapeResult?.markdown?.substring(0, 100)
       };
     } catch (e: any) {
-      results.firecrawlResult = {
+      results.providerResult = {
         success: false,
         error: e.message
       };

@@ -19,17 +19,22 @@ interface MetricBarsProps {
 export default function MetricBars({ metrics }: MetricBarsProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   
-  const getBarColor = (score: number) => {
-    // Use brand orange colors with opacity for gradient effect
-    if (score >= 80) return 'bg-heat-100';
-    if (score >= 60) return 'bg-heat-90';
-    if (score >= 40) return 'bg-heat-40 opacity-80';
-    return 'bg-heat-20';
+  const getBarColor = (status: 'pass' | 'warning' | 'fail') => {
+    if (status === 'pass') return 'bg-emerald-500';
+    if (status === 'warning') return 'bg-amber-500';
+    return 'bg-red-500';
   };
   
-  const getBulletColor = (score: number) => {
-    // Always use heat-100 for all bullets for consistency
-    return 'bg-heat-100';
+  const getBulletColor = (status: 'pass' | 'warning' | 'fail') => {
+    if (status === 'pass') return 'bg-emerald-500';
+    if (status === 'warning') return 'bg-amber-500';
+    return 'bg-red-500';
+  };
+
+  const getScoreTextColor = (status: 'pass' | 'warning' | 'fail') => {
+    if (status === 'pass') return 'text-emerald-700';
+    if (status === 'warning') return 'text-amber-700';
+    return 'text-red-700';
   };
   
   const toggleExpanded = (label: string) => {
@@ -66,7 +71,7 @@ export default function MetricBars({ metrics }: MetricBarsProps) {
             >
               {/* Bullet and Label - fixed width */}
               <div className="col-span-4 flex items-center gap-8">
-                <div className={`w-6 h-6 rounded-full ${getBulletColor(metric.score)}`} />
+                <div className={`w-6 h-6 rounded-full ${getBulletColor(metric.status)}`} />
                 <span className="text-label-medium text-accent-black truncate">{metric.label}</span>
                 <motion.div
                   animate={{ rotate: isExpanded ? 180 : 0 }}
@@ -82,7 +87,7 @@ export default function MetricBars({ metrics }: MetricBarsProps) {
                 <div className="relative h-8 bg-black-alpha-8 rounded-full overflow-hidden">
                   {/* Animated bar */}
                   <motion.div
-                    className={`absolute inset-y-0 left-0 ${getBarColor(metric.score)} rounded-full`}
+                    className={`absolute inset-y-0 left-0 ${getBarColor(metric.status)} rounded-full`}
                     initial={{ width: 0 }}
                     animate={{ width: `${Math.max(metric.score, 2)}%` }}
                     transition={{ 
@@ -108,7 +113,7 @@ export default function MetricBars({ metrics }: MetricBarsProps) {
               
               {/* Score value - fixed width */}
               <div className="col-span-1 text-right">
-                <span className="text-label-medium font-medium text-heat-100">
+                <span className={`text-label-medium font-medium ${getScoreTextColor(metric.status)}`}>
                   {metric.score}%
                 </span>
               </div>
@@ -165,19 +170,19 @@ export default function MetricBars({ metrics }: MetricBarsProps) {
       >
         <div className="grid grid-cols-3 gap-16 text-center">
           <div>
-            <div className="text-title-h3 text-heat-150">
+            <div className="text-title-h3 text-emerald-700">
               {metrics.filter(m => m.status === 'pass').length}
             </div>
             <div className="text-label-small text-black-alpha-48">Passing</div>
           </div>
           <div>
-            <div className="text-title-h3 text-heat-100">
+            <div className="text-title-h3 text-amber-700">
               {metrics.filter(m => m.status === 'warning').length}
             </div>
             <div className="text-label-small text-black-alpha-48">Warning</div>
           </div>
           <div>
-            <div className="text-title-h3 text-heat-50">
+            <div className="text-title-h3 text-red-700">
               {metrics.filter(m => m.status === 'fail').length}
             </div>
             <div className="text-label-small text-black-alpha-48">Failing</div>

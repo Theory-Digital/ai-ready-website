@@ -24,7 +24,7 @@ export default function HomeHeroBackground() {
 
           <div className="absolute top-111 -right-1 w-102 text-center">
             {" "}
-            [ SCRAPE ]{" "}
+            [ RFQ ]{" "}
           </div>
           <div className="absolute bottom-10 -right-1 w-102 text-center">
             {" "}
