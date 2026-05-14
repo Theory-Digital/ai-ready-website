@@ -422,7 +422,66 @@ export default function ControlPanel({
   ] : [];
 
   const visibleScore = overallScore;
-  const findCheckScore = (id: string) => combinedChecks.find(check => check.id === id)?.score || 0;
+  const findCheck = (id: string) => combinedChecks.find(check => check.id === id);
+  const findCheckScore = (id: string) => findCheck(id)?.score || 0;
+  const formatCheckEvidence = (check?: CheckItem) => {
+    if (!check) return '';
+
+    const score = typeof check.score === 'number' ? `${check.score}%` : 'not scored';
+    const details = check.details ? `: ${check.details}` : '';
+
+    return `${check.label} scored ${score}${details}`;
+  };
+  const formatCheckScore = (check?: CheckItem) => {
+    if (!check) return '';
+
+    const score = typeof check.score === 'number' ? `${check.score}%` : 'not scored';
+
+    return `${check.label} (${score})`;
+  };
+
+  const impactDefinitions = [
+    {
+      id: 'procurement-readiness',
+      low: 'A buyer who is ready to ask for pricing may have to hunt for the RFQ, phone, email, industries served, or project proof before they can act.',
+      mid: 'The lead path exists, but it is not strong enough for a procurement buyer or AI summary to confidently describe the next step.',
+      high: 'Buyers and AI systems can identify the procurement path without much guesswork.',
+    },
+    {
+      id: 'industrial-services',
+      low: 'AI systems may see the company name but still be unable to classify the actual services, capabilities, and service area.',
+      mid: 'The site gives some service clues, but the capability story can still be summarized too broadly or inaccurately.',
+      high: 'The core services are clear enough to classify and summarize.',
+    },
+    {
+      id: 'local-industrial-schema',
+      low: 'For local searches around Nisku, Leduc County, Edmonton, or Alberta, there is weak structured proof tying the company to the right place.',
+      mid: 'Local identity is partly visible, but the business entity and service-area signals are incomplete.',
+      high: 'The business identity and local service area are easy to extract.',
+    },
+    {
+      id: 'certifications-safety',
+      low: 'Procurement teams may not see the safety, compliance, insurance, or certification proof they use to shortlist lower-risk vendors.',
+      mid: 'Some trust signals are present, but they are not complete or structured enough to carry the comparison.',
+      high: 'Safety and compliance proof is visible enough to support buyer trust.',
+    },
+    {
+      id: 'equipment-product-data',
+      low: 'If buyers need equipment, rental, part, or spec details, AI systems have little structured data to match the company to that need.',
+      mid: 'There are some product or spec clues, but the data is not complete enough for reliable matching.',
+      high: 'Equipment, product, or spec details are structured enough to support procurement research.',
+    },
+  ];
+
+  const scoredImpactDefinitions = impactDefinitions
+    .map(definition => ({
+      ...definition,
+      check: findCheck(definition.id),
+      score: findCheckScore(definition.id),
+    }))
+    .filter(item => item.check)
+    .sort((a, b) => a.score - b.score);
+
   const scoreMeaning = visibleScore >= 80
     ? {
         label: 'Strong',
@@ -447,31 +506,37 @@ export default function ControlPanel({
           bg: 'bg-red-100 border-red-500',
         };
 
-  const practicalImplications = visibleScore >= 80
-    ? [
-        'AI assistants are more likely to understand what the company does and where it serves.',
-        'Buyers can quickly confirm capabilities, trust signals, and next steps.',
-        'The site has a stronger chance of being summarized accurately in AI-driven search.',
-      ]
-    : visibleScore >= 50
+  const practicalImplications = scoredImpactDefinitions.length > 0
+    ? scoredImpactDefinitions
+        .slice(0, visibleScore >= 80 ? 3 : 4)
+        .map(item => {
+          const consequence = item.score >= 80 ? item.high : item.score >= 50 ? item.mid : item.low;
+          return `${formatCheckEvidence(item.check)}. ${consequence}`;
+        })
+    : visibleScore >= 80
       ? [
-          'AI assistants may mention the company, but with incomplete or generic descriptions.',
-          'Buyers may need to dig around to confirm services, location, certifications, or quote options.',
-          'Competitors with clearer capability pages may look more credible in AI-generated answers.',
+          'The strongest signal is practical clarity: AI assistants are more likely to understand what the company does, where it serves, and how a buyer should act.',
+          'Buyers can confirm capabilities, trust signals, and next steps without digging through the site.',
+          'The site has a stronger chance of being summarized accurately in AI-driven search.',
         ]
-      : [
-          'The company may be skipped when someone asks AI for industrial providers in Nisku or Edmonton.',
-          'AI assistants may not confidently know what services the company offers or where it works.',
-          'Buyers may miss key reasons to trust the company, such as certifications, safety programs, or project fit.',
-          'A competitor with clearer services and quote paths can look like the safer choice.',
-        ];
+      : visibleScore >= 50
+        ? [
+            'The impact is partial visibility: AI assistants may mention the company, but important buyer details can still be incomplete or too generic.',
+            'Buyers may need to dig around to confirm services, location, certifications, or quote options.',
+            'Competitors with clearer capability pages may look more credible in AI-generated answers.',
+          ]
+        : [
+            'The impact is a confidence problem: AI systems and buyers do not have enough clear evidence to understand the company quickly.',
+            'Missing service, location, trust, or quote signals can cause the company to be overlooked in comparison-heavy research.',
+            'A competitor with clearer services and quote paths can look like the safer choice.',
+          ];
 
   const priorityFixes = [
-    findCheckScore('industrial-services') < 80 && 'State the main services and capabilities in plain language.',
-    findCheckScore('procurement-readiness') < 80 && 'Make the quote/contact path obvious for buyers.',
-    findCheckScore('local-industrial-schema') < 80 && 'Make the service area clear: Nisku, Leduc County, Edmonton, Alberta, or Western Canada.',
-    findCheckScore('certifications-safety') < 80 && 'Show safety, compliance, insurance, and certification proof where buyers can see it.',
-    findCheckScore('equipment-product-data') < 80 && 'Add equipment, product, rental, part, or spec details where relevant.',
+    findCheckScore('industrial-services') < 80 && `${formatCheckScore(findCheck('industrial-services'))}: State the main services and capabilities in plain language.`,
+    findCheckScore('procurement-readiness') < 80 && `${formatCheckScore(findCheck('procurement-readiness'))}: Make the quote/contact path obvious for buyers.`,
+    findCheckScore('local-industrial-schema') < 80 && `${formatCheckScore(findCheck('local-industrial-schema'))}: Make the service area clear: Nisku, Leduc County, Edmonton, Alberta, or Western Canada.`,
+    findCheckScore('certifications-safety') < 80 && `${formatCheckScore(findCheck('certifications-safety'))}: Show safety, compliance, insurance, and certification proof where buyers can see it.`,
+    findCheckScore('equipment-product-data') < 80 && `${formatCheckScore(findCheck('equipment-product-data'))}: Add equipment, product, rental, part, or spec details where relevant.`,
   ].filter(Boolean).slice(0, 4) as string[];
 
   return (

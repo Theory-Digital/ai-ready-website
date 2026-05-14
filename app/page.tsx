@@ -51,9 +51,11 @@ export default function StyleGuidePage() {
     signature: string;
   } | null>(null);
   const [checkedSignedParams, setCheckedSignedParams] = useState(false);
+  const [reportLink, setReportLink] = useState("");
   const autoStartedRef = useRef(false);
   const contactEmail = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "megan@theorydigital.ca";
-  const contactHref = `mailto:${contactEmail.replace(/^mailto:/i, "")}`;
+  const normalizedContactEmail = contactEmail.replace(/^mailto:/i, "");
+  const contactHref = `mailto:${normalizedContactEmail}`;
 
   const handleAnalysis = async (
     targetUrl = url,
@@ -144,6 +146,7 @@ export default function StyleGuidePage() {
       const nextSignedParams = { url: signedUrl, expires, signature };
       setSignedParams(nextSignedParams);
       setUrl(signedUrl);
+      setReportLink(window.location.href);
 
       if (!autoStartedRef.current) {
         autoStartedRef.current = true;
@@ -155,6 +158,21 @@ export default function StyleGuidePage() {
   }, []);
 
   const hasSignedAccess = !!signedParams;
+  const reportContactBodyLines = [
+    'Hey, I have questions about my AI readiness report. Can you help me?',
+    '',
+    'Report link:',
+    reportLink,
+  ];
+
+  if (url) {
+    reportContactBodyLines.push('', `Website analyzed: ${url}`);
+  }
+
+  const reportContactBody = reportContactBodyLines.join('\n');
+  const reportContactHref = hasSignedAccess && reportLink
+    ? `mailto:${normalizedContactEmail}?subject=${encodeURIComponent('Questions about my AI readiness report')}&body=${encodeURIComponent(reportContactBody)}`
+    : contactHref;
 
   return (
     <HeaderProvider>
@@ -177,7 +195,7 @@ export default function StyleGuidePage() {
               <div className="flex gap-8">
                 <a
                   className="ninety-mono ninety-lift border-2 border-[#0A0A0A] bg-[#FFD100] px-16 py-10 text-[11px] text-[#0A0A0A]"
-                  href={contactHref}
+                  href={reportContactHref}
                 >
                   Contact Us
                 </a>
@@ -216,7 +234,7 @@ export default function StyleGuidePage() {
                   {!checkedSignedParams ? null : !hasSignedAccess ? (
                     <a
                       className="ninety-mono ninety-lift block mx-auto mt-18 w-max border-2 border-[#0A0A0A] bg-[#FFD100] px-18 py-12 text-[12px] text-[#0A0A0A]"
-                      href={contactHref}
+                      href={reportContactHref}
                     >
                       Contact us for a report
                     </a>
