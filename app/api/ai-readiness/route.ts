@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ScrapeProvider from '@mendable/firecrawl-js';
+import crypto from 'crypto';
+import { mkdir, readFile, writeFile } from 'fs/promises';
+import path from 'path';
 import { verifySignedAnalysisParams } from '../../../utils/signed-analysis';
 
 const scrapeProvider = new ScrapeProvider({
@@ -16,6 +19,102 @@ interface CheckResult {
   details: string;
   recommendation: string;
   actionItems?: string[];
+}
+
+interface AiReadinessResponse {
+  success: true;
+  url: string;
+  overallScore: number;
+  checks: CheckResult[];
+  htmlContent: string;
+  metadata: {
+    title?: string;
+    description?: string;
+    analyzedAt: string;
+    scoreBreakdown: Record<string, number>;
+    scoreCaps: string[];
+    cache?: {
+      hit: boolean;
+      cachedAt: string;
+    };
+  };
+}
+
+interface CachedReport {
+  cachedAt: string;
+  response: AiReadinessResponse;
+}
+
+class AnalysisRunError extends Error {
+  status: number;
+
+  constructor(message: string, status = 500) {
+    super(message);
+    this.status = status;
+  }
+}
+
+const reportCacheDir = path.join(process.cwd(), '.next', 'cache', 'ai-readiness-reports');
+const configuredReportCacheTtlSeconds = Number(process.env.AI_READINESS_CACHE_TTL_SECONDS);
+const reportCacheTtlSeconds = Number.isFinite(configuredReportCacheTtlSeconds)
+  ? configuredReportCacheTtlSeconds
+  : 60 * 60 * 24 * 30;
+const reportCacheTtlMs = Math.max(0, reportCacheTtlSeconds) * 1000;
+const inFlightReports = new Map<string, Promise<AiReadinessResponse>>();
+
+function getReportCacheKey(params: { url: string; expires: string | number; signature: string }): string {
+  return crypto
+    .createHash('sha256')
+    .update(`${params.url}\n${params.expires}\n${params.signature}`)
+    .digest('hex');
+}
+
+function getReportCachePath(cacheKey: string): string {
+  return path.join(reportCacheDir, `${cacheKey}.json`);
+}
+
+function withCacheMetadata(response: AiReadinessResponse, hit: boolean, cachedAt: string): AiReadinessResponse {
+  return {
+    ...response,
+    metadata: {
+      ...response.metadata,
+      cache: {
+        hit,
+        cachedAt,
+      },
+    },
+  };
+}
+
+async function readCachedReport(cacheKey: string): Promise<AiReadinessResponse | null> {
+  try {
+    const raw = await readFile(getReportCachePath(cacheKey), 'utf8');
+    const cached = JSON.parse(raw) as CachedReport;
+    const cachedAtMs = Date.parse(cached.cachedAt);
+
+    if (!cached.response?.success || Number.isNaN(cachedAtMs)) {
+      return null;
+    }
+
+    if (reportCacheTtlMs > 0 && Date.now() - cachedAtMs > reportCacheTtlMs) {
+      return null;
+    }
+
+    return withCacheMetadata(cached.response, true, cached.cachedAt);
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedReport(cacheKey: string, response: AiReadinessResponse): Promise<void> {
+  const cachedAt = new Date().toISOString();
+  const cached: CachedReport = {
+    cachedAt,
+    response: withCacheMetadata(response, false, cachedAt),
+  };
+
+  await mkdir(reportCacheDir, { recursive: true });
+  await writeFile(getReportCachePath(cacheKey), JSON.stringify(cached), 'utf8');
 }
 
 // Calculate Flesch-Kincaid readability score
@@ -839,7 +938,43 @@ export async function POST(request: NextRequest) {
     }
 
     const url = signedAnalysis.url;
+    const cacheKey = getReportCacheKey({
+      url,
+      expires: body.expires,
+      signature: body.signature,
+    });
+    const cachedReport = await readCachedReport(cacheKey);
 
+    if (cachedReport) {
+      console.log(`[AI-READY] Cache hit for ${new URL(url).hostname.toLowerCase()}`);
+      return NextResponse.json(cachedReport);
+    }
+
+    const existingJob = inFlightReports.get(cacheKey);
+    if (existingJob) {
+      console.log(`[AI-READY] Reusing in-flight analysis for ${new URL(url).hostname.toLowerCase()}`);
+      return NextResponse.json(await existingJob);
+    }
+
+    const analysisJob = runAnalysis(url, cacheKey);
+    inFlightReports.set(cacheKey, analysisJob);
+
+    try {
+      return NextResponse.json(await analysisJob);
+    } finally {
+      inFlightReports.delete(cacheKey);
+    }
+
+  } catch (error) {
+    console.error('AI Readiness analysis error:', error);
+    return NextResponse.json(
+      { error: error instanceof AnalysisRunError ? error.message : 'Failed to analyze website' },
+      { status: error instanceof AnalysisRunError ? error.status : 500 }
+    );
+  }
+}
+
+async function runAnalysis(url: string, cacheKey: string): Promise<AiReadinessResponse> {
     console.log('[AI-READY] Step 1/4: Starting site snapshot...');
     const scrapeStartTime = Date.now();
 
@@ -852,7 +987,7 @@ export async function POST(request: NextRequest) {
       console.log(`[AI-READY] Step 1/4: Site snapshot completed in ${Date.now() - scrapeStartTime}ms`);
     } catch (scrapeError) {
       console.error('Site snapshot error:', scrapeError);
-      return NextResponse.json({ error: 'Failed to scrape website. Please check the URL.' }, { status: 500 });
+      throw new AnalysisRunError('Failed to scrape website. Please check the URL.');
     }
 
     // Check different possible response structures
@@ -861,7 +996,7 @@ export async function POST(request: NextRequest) {
 
     if (!html) {
       console.error('No HTML content found in response');
-      return NextResponse.json({ error: 'Failed to extract content from website' }, { status: 500 });
+      throw new AnalysisRunError('Failed to extract content from website');
     }
 
     console.log('[AI-READY] Step 2/4: Analyzing HTML content...');
@@ -897,7 +1032,7 @@ export async function POST(request: NextRequest) {
     console.log(`[AI-READY] Final scoring for ${domain}: final=${overallScore}, categoryScores=${JSON.stringify(scoring.categoryScores)}, appliedCaps=${JSON.stringify(scoring.appliedCaps)}`);
     console.log(`[AI-READY] Total analysis time: ${Date.now() - scrapeStartTime}ms`);
 
-    return NextResponse.json({
+    const response: AiReadinessResponse = {
       success: true,
       url,
       overallScore,
@@ -910,13 +1045,13 @@ export async function POST(request: NextRequest) {
         scoreBreakdown: scoring.categoryScores,
         scoreCaps: scoring.appliedCaps
       }
-    });
+    };
 
-  } catch (error) {
-    console.error('AI Readiness analysis error:', error);
-    return NextResponse.json(
-      { error: 'Failed to analyze website' },
-      { status: 500 }
-    );
+    try {
+      await writeCachedReport(cacheKey, response);
+    } catch (cacheError) {
+      console.error('Failed to write AI readiness cache:', cacheError);
+    }
+
+    return response;
   }
-}
