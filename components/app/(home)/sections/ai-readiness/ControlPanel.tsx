@@ -150,8 +150,8 @@ export default function ControlPanel({
     },
     {
       id: 'procurement-readiness',
-      label: 'Procurement Readiness',
-      description: 'RFQ and buyer path',
+      label: 'Buyer Path',
+      description: 'Quote and contact path',
       icon: Building2,
       status: 'pending',
     },
@@ -163,14 +163,21 @@ export default function ControlPanel({
   const [hoveredCheck, setHoveredCheck] = useState<string | null>(null);
   const [resultsTab, setResultsTab] = useState<'overview' | 'advanced'>('overview');
   const [viewMode, setViewMode] = useState<'grid' | 'chart' | 'bars'>('grid');
+  const getDisplayLabel = (check: Pick<CheckItem, 'id' | 'label'>) => {
+    if (check.id === 'procurement-readiness') return 'Buyer Path';
+    return check.label;
+  };
 
   useEffect(() => {
     if (analysisData && analysisData.checks && showResults) {
       // Use real data from API
       const mappedChecks = analysisData.checks.map((check: any) => ({
         ...check,
+        label: check.id === 'procurement-readiness' ? 'Buyer Path' : check.label,
+        description: check.id === 'procurement-readiness'
+          ? 'Quote and contact path'
+          : check.details || checks.find(c => c.id === check.id)?.description,
         icon: checks.find(c => c.id === check.id)?.icon || FileText,
-        description: check.details || checks.find(c => c.id === check.id)?.description,
       }));
       setChecks(mappedChecks);
       setCombinedChecks(mappedChecks); // Initialize with basic checks
@@ -430,22 +437,22 @@ export default function ControlPanel({
     const score = typeof check.score === 'number' ? `${check.score}%` : 'not scored';
     const details = check.details ? `: ${check.details}` : '';
 
-    return `${check.label} scored ${score}${details}`;
+    return `${getDisplayLabel(check)} scored ${score}${details}`;
   };
   const formatCheckScore = (check?: CheckItem) => {
     if (!check) return '';
 
     const score = typeof check.score === 'number' ? `${check.score}%` : 'not scored';
 
-    return `${check.label} (${score})`;
+    return `${getDisplayLabel(check)} (${score})`;
   };
 
   const impactDefinitions = [
     {
       id: 'procurement-readiness',
-      low: 'A buyer who is ready to ask for pricing may have to hunt for the RFQ, phone, email, industries served, or project proof before they can act.',
-      mid: 'The lead path exists, but it is not strong enough for a procurement buyer or AI summary to confidently describe the next step.',
-      high: 'Buyers and AI systems can identify the procurement path without much guesswork.',
+      low: 'A buyer who is ready to ask for pricing may have to hunt for the quote path, phone, email, industries served, or project proof before they can act.',
+      mid: 'The lead path exists, but it is not strong enough for a buyer or AI summary to confidently describe the next step.',
+      high: 'Buyers and AI systems can identify the quote/contact path without much guesswork.',
     },
     {
       id: 'industrial-services',
@@ -461,7 +468,7 @@ export default function ControlPanel({
     },
     {
       id: 'certifications-safety',
-      low: 'Procurement teams may not see the safety, compliance, insurance, or certification proof they use to shortlist lower-risk vendors.',
+      low: 'Buyers may not see the safety, compliance, insurance, or certification proof they use to shortlist lower-risk vendors.',
       mid: 'Some trust signals are present, but they are not complete or structured enough to carry the comparison.',
       high: 'Safety and compliance proof is visible enough to support buyer trust.',
     },
@@ -469,7 +476,7 @@ export default function ControlPanel({
       id: 'equipment-product-data',
       low: 'If buyers need equipment, rental, part, or spec details, AI systems have little structured data to match the company to that need.',
       mid: 'There are some product or spec clues, but the data is not complete enough for reliable matching.',
-      high: 'Equipment, product, or spec details are structured enough to support procurement research.',
+      high: 'Equipment, product, or spec details are structured enough to support buyer research.',
     },
   ];
 
@@ -898,7 +905,7 @@ export default function ControlPanel({
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.3 }}
               >
-                <h3 className="text-label-large text-heat-100 mb-16 font-medium">AI Recommendations</h3>
+                <h3 className="text-label-large text-heat-100 mb-16 font-medium">Deeper Analysis</h3>
                 <RadarChart
                   data={aiInsights
                     .filter(check => check.status !== 'pending' && check.status !== 'checking')
@@ -970,7 +977,7 @@ export default function ControlPanel({
           >
             Rerun Report
           </button>
-          {true && (
+          {resultsTab === 'advanced' && (
             <button
               onClick={async () => {
               setIsAnalyzingAI(true);
@@ -1111,8 +1118,8 @@ export default function ControlPanel({
             disabled={isAnalyzingAI}
             className="px-20 py-10 bg-accent-black hover:bg-black-alpha-80 text-white rounded-8 text-label-medium transition-all disabled:opacity-50"
           >
-              {isAnalyzingAI ? 'Generating...' : 'Generate Recommendations'}
-            </button>
+            {isAnalyzingAI ? 'Analyzing...' : 'Run Deeper Analysis'}
+          </button>
           )}
         </motion.div>
       )}

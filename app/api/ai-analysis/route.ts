@@ -24,8 +24,8 @@ async function generateOpenAIInsights(url: string, htmlContent: string, currentC
   try {
     const response = await openai.responses.create({
       model: AI_ANALYSIS_MODEL,
-      instructions: 'You are an AI readiness expert analyzing industrial and B2B local service websites, especially companies serving Nisku, Leduc County, Edmonton, Alberta, and Western Canada. Provide practical recommendations for procurement, local discovery, and AI extraction. Return only valid JSON.',
-      input: `Analyze this webpage for AI readiness for an industrial company serving the Nisku / Edmonton region. Adapt recommendations to B2B buyers, procurement teams, and AI systems trying to identify capabilities, service area, trust signals, and RFQ paths.
+      instructions: 'You are an AI readiness expert analyzing industrial and B2B local service websites, especially companies serving Nisku, Leduc County, Edmonton, Alberta, and Western Canada. Provide practical recommendations for buyer clarity, local discovery, and AI extraction. Return only valid JSON.',
+      input: `Analyze this webpage for AI readiness for an industrial company serving the Nisku / Edmonton region. Adapt recommendations to B2B buyers and AI systems trying to identify capabilities, service area, trust signals, and quote/contact paths.
 
 URL: ${url}
 Page-Level Scores: ${JSON.stringify(currentChecks.filter(c => ['readability', 'heading-structure', 'meta-tags'].includes(c.id)).map(c => c.label + ': ' + c.score))}
@@ -40,7 +40,7 @@ Analyze these universal AI readiness factors:
 7. Content Uniqueness (content-uniqueness) - Is this original content vs duplicated/thin content?
 8. Machine Interpretability (machine-interpretability) - How easily can AI parse and understand this?
 
-Also evaluate industrial buyer signals: LocalBusiness/Organization schema, Service/Product schema, service area, equipment/spec data, safety certifications, procurement/RFQ path, emergency service availability, industries served, and project evidence.
+Also evaluate industrial buyer signals: LocalBusiness/Organization schema, Service/Product schema, service area, equipment/spec data, safety certifications, quote/contact path, emergency service availability, industries served, and project evidence.
 Return JSON with insights array containing {id, label, score(0-100), status(pass/warning/fail), details, recommendation, actionItems(array of 5 specific actions)} for each area.`,
       max_output_tokens: 6000,
       text: {

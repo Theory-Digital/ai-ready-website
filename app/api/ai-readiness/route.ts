@@ -302,7 +302,7 @@ function calculateIndustrialReadinessScore(checks: CheckResult[]): {
     {
       id: 'procurement-readiness',
       maxScore: 70,
-      reason: 'No clear RFQ/contact procurement path',
+      reason: 'No clear quote/contact path',
     },
     {
       id: 'industrial-services',
@@ -653,12 +653,12 @@ async function analyzeHTML(html: string, metadata: any, url: string): Promise<Ch
       : `${productSpecCount} equipment/spec signal(s) detected, but Product schema is missing`,
     recommendation: productsScore < 80
       ? 'For rentals, parts, or equipment pages, add Product schema with manufacturer, model, SKU/part numbers, offers, availability, and visible spec data'
-      : 'Equipment and product details are well structured for AI-assisted procurement',
+      : 'Equipment and product details are well structured for buyer research',
     actionItems: [
       'Use Product schema only for real products, parts, rentals, or equipment listings',
       'Include manufacturer, brand, model, SKU, dimensions/capacity, and availability when known',
       'Summarize PDF spec sheets in HTML so AI systems do not need to infer from downloads only',
-      'Link products or equipment back to relevant services and RFQ paths'
+      'Link products or equipment back to relevant services and quote paths'
     ]
   });
 
@@ -711,7 +711,7 @@ async function analyzeHTML(html: string, metadata: any, url: string): Promise<Ch
     ]
   });
 
-  console.log('[AI-READY] HTML Check 10/10: Checking procurement readiness...');
+  console.log('[AI-READY] HTML Check 10/10: Checking quote/contact path...');
   const hasRfq = hasAnyText(lowerText, ['request a quote', 'rfq', 'quote request', 'get a quote', 'estimate']);
   const hasContactPath = hasPhone || lowerText.includes('@') || /href=["']mailto:/i.test(html) || /href=["']tel:/i.test(html);
   const hasEmergency = hasAnyText(lowerText, ['24/7', '24 hour', 'emergency', 'after hours', 'shutdown', 'turnaround']);
@@ -727,19 +727,19 @@ async function analyzeHTML(html: string, metadata: any, url: string): Promise<Ch
 
   results.push({
     id: 'procurement-readiness',
-    label: 'Procurement Readiness',
+    label: 'Buyer Path',
     status: scoreCheck(procurementScore),
     score: procurementScore,
     details: [
-      hasRfq ? 'RFQ path found' : 'RFQ path missing',
+      hasRfq ? 'quote path found' : 'quote path missing',
       hasContactPath ? 'contact path found' : 'contact path missing',
       hasIndustriesServed ? 'industries served are visible' : 'industries served are unclear'
     ].join(', '),
     recommendation: procurementScore < 80
-      ? 'Make it easy for buyers and AI systems to identify capabilities, service area, RFQ/contact path, emergency availability, and relevant industries'
-      : 'Procurement path and buyer intent signals are clear',
+      ? 'Make it easy for buyers and AI systems to identify capabilities, service area, quote/contact path, emergency availability, and relevant industries'
+      : 'Quote/contact path and buyer intent signals are clear',
     actionItems: [
-      'Add a prominent RFQ or quote request path with phone and email alternatives',
+      'Add a prominent quote request path with phone and email alternatives',
       'State industries served and typical job/project types',
       'Mention emergency, shutdown, or after-hours availability only if actually offered',
       'Add project examples, client sectors, or capability photos with descriptive captions'
