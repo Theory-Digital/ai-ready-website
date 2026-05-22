@@ -28,6 +28,13 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <ColorStyles />
+        {/* Fathom - beautiful, simple website analytics */}
+        <script
+          src="https://cdn.usefathom.com/script.js"
+          data-site="QQTHCBAF"
+          defer
+        />
+        {/* / Fathom */}
       </head>
       <body
         className={`${GeistMono.variable} ${robotoMono.variable} font-sans text-accent-black bg-background-base overflow-x-clip`}
