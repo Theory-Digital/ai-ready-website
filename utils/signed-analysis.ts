@@ -15,10 +15,31 @@ export interface SignedAnalysisResult {
   status?: number;
 }
 
+export interface AnalysisAuthorizationResult extends SignedAnalysisResult {
+  authKey?: string;
+  mode?: 'access' | 'signed';
+}
+
 const MAX_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 45;
 
 function getSigningSecret(): string | null {
   return process.env.SIGNED_ANALYSIS_SECRET || null;
+}
+
+function getAnalysisAccessCode(): string {
+  return process.env.ANALYSIS_ACCESS_CODE || 'oilmens';
+}
+
+function safeStringMatch(expected: string, provided: string): boolean {
+  const expectedHash = crypto.createHash('sha256').update(expected).digest();
+  const providedHash = crypto.createHash('sha256').update(provided).digest();
+
+  return crypto.timingSafeEqual(expectedHash, providedHash);
+}
+
+export function hasAnalysisAccess(access?: string | null): boolean {
+  if (!access) return false;
+  return safeStringMatch(getAnalysisAccessCode(), access);
 }
 
 function isPrivateIp(address: string): boolean {
@@ -180,5 +201,53 @@ export async function verifySignedAnalysisParams(
   return {
     ok: true,
     url: normalizedUrl,
+  };
+}
+
+export async function verifyAnalysisAuthorizationParams(
+  params: Partial<SignedAnalysisParams> & { access?: string | null }
+): Promise<AnalysisAuthorizationResult> {
+  if (params.access) {
+    if (!hasAnalysisAccess(params.access)) {
+      return {
+        ok: false,
+        error: 'This analysis access code is invalid.',
+        status: 401,
+      };
+    }
+
+    if (!params.url) {
+      return {
+        ok: false,
+        error: 'A website URL is required.',
+        status: 400,
+      };
+    }
+
+    try {
+      const normalizedUrl = normalizeAnalysisUrl(String(params.url));
+      await assertPublicAnalysisUrl(normalizedUrl);
+
+      return {
+        ok: true,
+        url: normalizedUrl,
+        mode: 'access',
+        authKey: 'access',
+      };
+    } catch (error: any) {
+      return {
+        ok: false,
+        error: error.message || 'Invalid analysis URL.',
+        status: 400,
+      };
+    }
+  }
+
+  const signedAnalysis = await verifySignedAnalysisParams(params);
+
+  return {
+    ...signedAnalysis,
+    mode: signedAnalysis.ok ? 'signed' : undefined,
+    authKey: signedAnalysis.ok ? `signed:${params.expires}:${params.signature}` : undefined,
   };
 }

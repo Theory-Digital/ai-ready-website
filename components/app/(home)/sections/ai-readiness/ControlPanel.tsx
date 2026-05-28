@@ -1082,6 +1082,7 @@ export default function ControlPanel({
                     url,
                     expires: analysisData?.signedParams?.expires,
                     signature: analysisData?.signedParams?.signature,
+                    access: analysisData?.accessToken,
                     htmlContent: analysisData?.htmlContent || '',
                     currentChecks: checks
                   })

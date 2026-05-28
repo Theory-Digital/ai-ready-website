@@ -19,23 +19,11 @@ import Globe from "@/components/app/(home)/sections/hero-input/_svg/Globe";
 import HeroScraping from "@/components/app/(home)/sections/hero-scraping/HeroScraping";
 import { Endpoint } from "@/components/shared/Playground/Context/types";
 import ControlPanel from "@/components/app/(home)/sections/ai-readiness/ControlPanel";
+import NinetyLogo from "@/components/shared/ninety-logo";
 
 // Import header components
 import { HeaderProvider } from "@/components/shared/header/HeaderContext";
 import HeaderWrapper from "@/components/shared/header/Wrapper/Wrapper";
-
-function NinetyLogo() {
-  return (
-    <div className="inline-flex items-stretch border-2 border-[#0A0A0A] text-[#0A0A0A]">
-      <div className="ninety-display flex items-center bg-[#F4EFE4] px-10 py-7 text-[18px] leading-none">
-        THE
-      </div>
-      <div className="ninety-display flex items-center border-l-2 border-[#0A0A0A] bg-[#FFD100] px-12 py-7 text-[34px] leading-none">
-        90
-      </div>
-    </div>
-  );
-}
 
 export default function StyleGuidePage() {
   const [tab] = useState<Endpoint>(Endpoint.Scrape);
@@ -50,21 +38,27 @@ export default function StyleGuidePage() {
     expires: string;
     signature: string;
   } | null>(null);
+  const [accessToken, setAccessToken] = useState("");
   const [checkedSignedParams, setCheckedSignedParams] = useState(false);
   const [reportLink, setReportLink] = useState("");
   const autoStartedRef = useRef(false);
   const contactEmail = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "megan@theorydigital.ca";
   const normalizedContactEmail = contactEmail.replace(/^mailto:/i, "");
-  const contactHref = `mailto:${normalizedContactEmail}`;
+  const scanRequestHref = "/scan";
 
   const handleAnalysis = async (
     targetUrl = url,
-    signatureParams = signedParams
+    authParams: {
+      url?: string;
+      expires?: string;
+      signature?: string;
+      access?: string;
+    } | null = signedParams || (accessToken ? { access: accessToken } : null)
   ) => {
     if (!targetUrl) return;
 
-    if (!signatureParams) {
-      setUrlError('This report requires a private signed link.');
+    if (!authParams?.access && (!authParams?.expires || !authParams?.signature)) {
+      setUrlError('This report requires a private access link.');
       return;
     }
 
@@ -79,7 +73,7 @@ export default function StyleGuidePage() {
       const urlObj = new URL(processedUrl);
       // Check if it's http or https
       if (urlObj.protocol !== 'https:') {
-        setUrlError('Signed reports require an HTTPS website URL.');
+        setUrlError('Reports require an HTTPS website URL.');
         return;
       }
     } catch (error) {
@@ -101,8 +95,9 @@ export default function StyleGuidePage() {
         },
         body: JSON.stringify({
           url: processedUrl,
-          expires: signatureParams.expires,
-          signature: signatureParams.signature,
+          expires: authParams.expires,
+          signature: authParams.signature,
+          access: authParams.access,
         }),
       });
 
@@ -115,9 +110,10 @@ export default function StyleGuidePage() {
           ...data,
           signedParams: {
             url: processedUrl,
-            expires: signatureParams.expires,
-            signature: signatureParams.signature,
+            expires: authParams.expires,
+            signature: authParams.signature,
           },
+          accessToken: authParams.access,
           aiAnalysisPromise: null, // No auto AI analysis
           hasOpenAIKey: false, // Disable auto AI
           autoStartAI: false // Don't auto-start
@@ -141,6 +137,11 @@ export default function StyleGuidePage() {
     const signedUrl = params.get('url');
     const expires = params.get('expires');
     const signature = params.get('signature') || params.get('sig');
+    const access = params.get('access');
+
+    if (access) {
+      setAccessToken(access);
+    }
 
     if (signedUrl && expires && signature) {
       const nextSignedParams = { url: signedUrl, expires, signature };
@@ -152,12 +153,23 @@ export default function StyleGuidePage() {
         autoStartedRef.current = true;
         handleAnalysis(signedUrl, nextSignedParams);
       }
+    } else if (signedUrl && access) {
+      const nextAccessParams = { url: signedUrl, access };
+      setUrl(signedUrl);
+      setReportLink(window.location.href);
+
+      if (!autoStartedRef.current) {
+        autoStartedRef.current = true;
+        handleAnalysis(signedUrl, nextAccessParams);
+      }
     }
 
     setCheckedSignedParams(true);
   }, []);
 
   const hasSignedAccess = !!signedParams;
+  const hasAccessCode = !!accessToken;
+  const hasReportAccess = hasSignedAccess || hasAccessCode;
   const reportContactBodyLines = [
     'Hey, I have questions about my AI readiness report. Can you help me?',
     '',
@@ -172,7 +184,7 @@ export default function StyleGuidePage() {
   const reportContactBody = reportContactBodyLines.join('\n');
   const reportContactHref = hasSignedAccess && reportLink
     ? `mailto:${normalizedContactEmail}?subject=${encodeURIComponent('Questions about my AI readiness report')}&body=${encodeURIComponent(reportContactBody)}`
-    : contactHref;
+    : scanRequestHref;
 
   return (
     <HeaderProvider>
@@ -227,11 +239,13 @@ export default function StyleGuidePage() {
                   <p className="text-center text-body-large">
                     {hasSignedAccess
                       ? 'Your private AI readiness report is being prepared from a single'
+                      : hasAccessCode
+                        ? 'Enter a site to run an AI readiness report from a single'
                       : 'Private AI readiness reports for industrial companies that need to be found by'}
                     <br className="lg-max:hidden" />
-                    {hasSignedAccess ? ' page snapshot.' : ' buyers, search engines, and AI assistants.'}
+                    {hasSignedAccess || hasAccessCode ? ' page snapshot.' : ' buyers, search engines, and AI assistants.'}
                   </p>
-                  {!checkedSignedParams ? null : !hasSignedAccess ? (
+                  {!checkedSignedParams ? null : !hasReportAccess ? (
                     <a
                       className="ninety-mono ninety-lift block mx-auto mt-18 w-max border-2 border-[#0A0A0A] bg-[#FFD100] px-18 py-12 text-[12px] text-[#0A0A0A]"
                       href={reportContactHref}
@@ -240,7 +254,7 @@ export default function StyleGuidePage() {
                     </a>
                   ) : (
                     <div className="ninety-mono block mx-auto mt-12 w-max border border-[#0A0A0A] bg-[#F4EFE4] px-10 py-6 text-[10px]">
-                      Private report link
+                      {hasSignedAccess ? 'Private report link' : 'Instant report access'}
                     </div>
                   )}
                 </motion.div>
@@ -272,7 +286,7 @@ export default function StyleGuidePage() {
           </div>
 
           {/* Signed report input - only show when not analyzing */}
-          {!isAnalyzing && !showResults && hasSignedAccess && (
+          {!isAnalyzing && !showResults && hasReportAccess && (
             <motion.div
               className="container lg:contents !p-16 relative -mt-90"
               initial={{ opacity: 1 }}
@@ -297,7 +311,13 @@ export default function StyleGuidePage() {
                     placeholder="example.com"
                     type="text"
                     value={url}
-                    readOnly
+                    readOnly={hasSignedAccess}
+                    onChange={(e) => {
+                      if (!hasSignedAccess) {
+                        setUrl(e.target.value);
+                        setUrlError("");
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && url.length > 0) {
                         e.preventDefault();
@@ -310,7 +330,7 @@ export default function StyleGuidePage() {
                     onClick={(e) => {
                       e.preventDefault();
                       if (url.length > 0) {
-                        handleAnalysis(url, signedParams);
+                        handleAnalysis(url, signedParams || (accessToken ? { access: accessToken } : null));
                       }
                     }}
                   >

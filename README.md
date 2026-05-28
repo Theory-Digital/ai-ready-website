@@ -15,6 +15,7 @@ npm install
 OPENAI_API_KEY=your_openai_api_key
 SCRAPE_PROVIDER_API_KEY=your_scraping_provider_api_key
 SIGNED_ANALYSIS_SECRET=use_a_long_random_secret
+ANALYSIS_ACCESS_CODE=oilmens
 NEXT_PUBLIC_CONTACT_EMAIL=megan@theorydigital.ca
 ```
 
@@ -24,6 +25,22 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to view the application.
+
+## Public Scan Request Form
+
+Use `/scan` as the public intake URL for visitors to submit a website URL, name, email, and company. The form posts to Netlify as `ai-readiness-scan-request` and includes hidden fields for referrer, submitted URL, UTM parameters, `gclid`, `fbclid`, and `msclkid`.
+
+You can prefill the website field for ads or direct outreach:
+
+```bash
+https://reports.yoursite.com/scan?url=example.com&utm_source=google&utm_medium=cpc&utm_campaign=ai-readiness
+```
+
+Use the access code when the submission should launch the instant report after the form is logged:
+
+```bash
+https://reports.yoursite.com/scan?access=oilmens&utm_source=google&utm_medium=cpc&utm_campaign=ai-readiness
+```
 
 ## Signed Report Links
 

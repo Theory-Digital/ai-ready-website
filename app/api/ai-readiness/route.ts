@@ -3,7 +3,7 @@ import ScrapeProvider from '@mendable/firecrawl-js';
 import crypto from 'crypto';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import path from 'path';
-import { verifySignedAnalysisParams } from '../../../utils/signed-analysis';
+import { verifyAnalysisAuthorizationParams } from '../../../utils/signed-analysis';
 
 const scrapeProvider = new ScrapeProvider({
   apiKey: process.env.SCRAPE_PROVIDER_API_KEY || process.env.FIRECRAWL_API_KEY!
@@ -62,10 +62,10 @@ const reportCacheTtlSeconds = Number.isFinite(configuredReportCacheTtlSeconds)
 const reportCacheTtlMs = Math.max(0, reportCacheTtlSeconds) * 1000;
 const inFlightReports = new Map<string, Promise<AiReadinessResponse>>();
 
-function getReportCacheKey(params: { url: string; expires: string | number; signature: string }): string {
+function getReportCacheKey(params: { url: string; authKey: string }): string {
   return crypto
     .createHash('sha256')
-    .update(`${params.url}\n${params.expires}\n${params.signature}`)
+    .update(`${params.url}\n${params.authKey}`)
     .digest('hex');
 }
 
@@ -924,24 +924,24 @@ async function checkAdditionalFiles(domain: string): Promise<{ robots: CheckResu
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const signedAnalysis = await verifySignedAnalysisParams({
+    const analysisAuthorization = await verifyAnalysisAuthorizationParams({
       url: body.url,
       expires: body.expires,
       signature: body.signature,
+      access: body.access,
     });
 
-    if (!signedAnalysis.ok || !signedAnalysis.url) {
+    if (!analysisAuthorization.ok || !analysisAuthorization.url) {
       return NextResponse.json(
-        { error: signedAnalysis.error || 'A valid signed analysis link is required' },
-        { status: signedAnalysis.status || 401 }
+        { error: analysisAuthorization.error || 'A valid signed analysis link or access code is required' },
+        { status: analysisAuthorization.status || 401 }
       );
     }
 
-    const url = signedAnalysis.url;
+    const url = analysisAuthorization.url;
     const cacheKey = getReportCacheKey({
       url,
-      expires: body.expires,
-      signature: body.signature,
+      authKey: analysisAuthorization.authKey || 'signed',
     });
     const cachedReport = await readCachedReport(cacheKey);
 

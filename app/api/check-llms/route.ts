@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ScrapeProvider from '@mendable/firecrawl-js';
-import { verifySignedAnalysisParams } from '../../../utils/signed-analysis';
+import { verifyAnalysisAuthorizationParams } from '../../../utils/signed-analysis';
 
 const scrapeProvider = new ScrapeProvider({
   apiKey: process.env.SCRAPE_PROVIDER_API_KEY || process.env.FIRECRAWL_API_KEY!
@@ -11,20 +11,21 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const signedAnalysis = await verifySignedAnalysisParams({
+    const analysisAuthorization = await verifyAnalysisAuthorizationParams({
       url: body.url,
       expires: body.expires,
       signature: body.signature,
+      access: body.access,
     });
 
-    if (!signedAnalysis.ok || !signedAnalysis.url) {
+    if (!analysisAuthorization.ok || !analysisAuthorization.url) {
       return NextResponse.json(
-        { error: signedAnalysis.error || 'A valid signed analysis link is required' },
-        { status: signedAnalysis.status || 401 }
+        { error: analysisAuthorization.error || 'A valid signed analysis link or access code is required' },
+        { status: analysisAuthorization.status || 401 }
       );
     }
 
-    const url = signedAnalysis.url;
+    const url = analysisAuthorization.url;
     const baseUrl = new URL(url).origin;
     
     // Check for llms.txt variations directly
